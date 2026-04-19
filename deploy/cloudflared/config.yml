@@ -1,0 +1,9 @@
+tunnel: vma-calculator
+credentials-file: /home/gladius/.cloudflared/vma-calculator.json
+
+ingress:
+  - hostname: vma.maryamkarim.com
+    service: http://localhost:80
+  - service: http_status:404
+
+metrics: localhost:54322

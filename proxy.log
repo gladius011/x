@@ -1,0 +1,3 @@
+Proxy server listening on http://localhost:8080
+Proxying /api -> http://127.0.0.1:3001
+Serving SPA from /home/gladius/Codes/project/frontend/dist

@@ -1,0 +1,7 @@
+✅ Connected to PostgreSQL
+✅ Database tables ready
+🚀 VMA Calculator API running on http://localhost:3001
+📊 Health check: http://localhost:3001/api/health
+2026-04-19T21:06:24.967Z POST /api/tests
+2026-04-19T21:07:56.081Z POST /api/tests
+2026-04-19T21:54:53.538Z POST /api/tests
