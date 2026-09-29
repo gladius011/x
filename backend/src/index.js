@@ -51,24 +51,37 @@ if (fs.existsSync(frontendDist)) {
 app.use(notFound);
 app.use(errorHandler);
 
-// Start server
-async function start() {
+let isTablesReady = false;
+async function initTables() {
+  if (isTablesReady) return;
   try {
-    // Ensure tables exist
     await TestModel.createTable();
     await UserModel.createTable();
+    isTablesReady = true;
     console.log('✅ Database tables ready');
+  } catch (err) {
+    console.error('❌ Database table initialization error:', err.message);
+  }
+}
 
+// Middleware to ensure DB tables are ready on first request
+app.use(async (req, res, next) => {
+  if (!isTablesReady) {
+    await initTables();
+  }
+  next();
+});
+
+// Start listening only in non-serverless environments (local, PM2, Docker)
+if (process.env.VERCEL !== '1') {
+  initTables().then(() => {
     app.listen(PORT, () => {
       console.log(`🚀 VMA Calculator API running on http://localhost:${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     });
-  } catch (err) {
+  }).catch((err) => {
     console.error('❌ Failed to start server:', err.message);
-    process.exit(1);
-  }
+  });
 }
-
-start();
 
 module.exports = app;
