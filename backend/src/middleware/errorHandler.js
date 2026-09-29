@@ -7,9 +7,7 @@ function errorHandler(err, req, res, _next) {
 
   res.status(err.status || 500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message,
+    error: err.message || 'Internal server error',
   });
 }
 

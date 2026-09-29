@@ -11,6 +11,7 @@ const userRoutes = require('./routes/userRoutes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const TestModel = require('./models/testModel');
 const UserModel = require('./models/userModel');
+const pool = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,9 +26,77 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+let isTablesReady = false;
+let tableInitPromise = null;
+
+async function initTables() {
+  if (isTablesReady) return;
+  if (!tableInitPromise) {
+    tableInitPromise = (async () => {
+      try {
+        await TestModel.createTable();
+        await UserModel.createTable();
+        isTablesReady = true;
+        console.log('✅ Database tables ready');
+      } catch (err) {
+        console.error('❌ Database table initialization error:', err.message);
+        tableInitPromise = null;
+        throw err;
+      }
+    })();
+  }
+  return tableInitPromise;
+}
+
+// Ensure DB tables exist before handling any API request
+app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api') && req.path !== '/api/health') {
+    try {
+      await initTables();
+    } catch (err) {
+      console.error('Database init failed before handling route:', err.message);
+      return next(new Error(`Database setup error: ${err.message}`));
+    }
+  }
+  next();
+});
+
+// Health check and database diagnostics
+app.get('/api/health', async (req, res) => {
+  const result = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    hasDbUrl: Boolean(process.env.DATABASE_URL),
+    env: process.env.NODE_ENV || 'unknown',
+  };
+
+  try {
+    const timeRes = await pool.query('SELECT NOW()');
+    result.database = 'connected';
+    result.dbTime = timeRes.rows[0].now;
+
+    const tableRes = await pool.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+    `);
+    result.tables = tableRes.rows.map((r) => r.table_name);
+
+    if (!result.tables.includes('users') || !result.tables.includes('tests')) {
+      await initTables();
+      const updatedTables = await pool.query(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+      `);
+      result.tables = updatedTables.rows.map((r) => r.table_name);
+      result.tablesCreated = true;
+    }
+
+    res.json(result);
+  } catch (err) {
+    result.database = 'failed';
+    result.error = err.message;
+    res.status(500).json(result);
+  }
 });
 
 app.use('/api/auth', authRoutes);
@@ -50,27 +119,6 @@ if (fs.existsSync(frontendDist)) {
 // Error handling
 app.use(notFound);
 app.use(errorHandler);
-
-let isTablesReady = false;
-async function initTables() {
-  if (isTablesReady) return;
-  try {
-    await TestModel.createTable();
-    await UserModel.createTable();
-    isTablesReady = true;
-    console.log('✅ Database tables ready');
-  } catch (err) {
-    console.error('❌ Database table initialization error:', err.message);
-  }
-}
-
-// Middleware to ensure DB tables are ready on first request
-app.use(async (req, res, next) => {
-  if (!isTablesReady) {
-    await initTables();
-  }
-  next();
-});
 
 // Start listening only in non-serverless environments (local, PM2, Docker)
 if (process.env.VERCEL !== '1') {
